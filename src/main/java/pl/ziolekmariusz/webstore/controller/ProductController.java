@@ -11,9 +11,16 @@ import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.ModelAndView;
 import pl.ziolekmariusz.webstore.domain.Product;
+import pl.ziolekmariusz.webstore.exception.NoProductsFoundUnderCategoryException;
+import pl.ziolekmariusz.webstore.exception.ProductNotFoundException;
 import pl.ziolekmariusz.webstore.service.ProductService;
 
+import javax.servlet.http.HttpServletRequest;
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -39,6 +46,10 @@ public class ProductController {
 
     @RequestMapping("{category}")
     public String getProductByCategory(Model model, @PathVariable("category") String productCategory) {
+        List<Product> products = productService.getProductByCategory(productCategory);
+        if (products == null || products.isEmpty()) {
+            throw new NoProductsFoundUnderCategoryException();
+        }
         model.addAttribute("products", productService.getProductByCategory(productCategory));
         return "products";
     }
@@ -63,11 +74,22 @@ public class ProductController {
     }
 
     @RequestMapping(value = "/add", method = RequestMethod.POST)
-    public String processAddNewProductForm(@ModelAttribute("newProduct") Product newProduct, BindingResult result) {
+    public String processAddNewProductForm(@ModelAttribute("newProduct") Product newProduct, BindingResult result, HttpServletRequest request) {
         String[] suppressedFields = result.getSuppressedFields();
         if (suppressedFields.length > 0) {
             throw new RuntimeException("Attempting to bind disallowed fields: " + StringUtils.arrayToCommaDelimitedString(suppressedFields));
         }
+        MultipartFile productImage = newProduct.getProductImage();
+        String rootDirectory = request.getSession().getServletContext().getRealPath("/");
+
+        if (productImage != null && !productImage.isEmpty()) {
+            try {
+                productImage.transferTo(new File(rootDirectory + "resources\\images\\" + newProduct.getProductId() + ".jpg"));
+            } catch (Exception e) {
+                throw new RuntimeException("Product Image saving failed", e);
+            }
+        }
+
         productService.addProduct(newProduct);
         return "redirect:/products";
     }
@@ -75,5 +97,16 @@ public class ProductController {
     @InitBinder
     public void initialiseBinder(WebDataBinder binder) {
         binder.setDisallowedFields("unitsInOrder", "discontinued");
+        binder.setAllowedFields("productId", "name", "unitPrice", "description", "manufacturer", "category", "unitsInStock", "productImage");
+    }
+
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ModelAndView handlerError(HttpServletRequest request, ProductNotFoundException exception) {
+        ModelAndView modelAndView = new ModelAndView();
+        modelAndView.addObject("invalidProductId", exception.getProductId());
+        modelAndView.addObject("exception", exception);
+        modelAndView.addObject("url", request.getRequestURL() + "?" + request.getQueryString());
+        modelAndView.setViewName("productNotFound");
+        return modelAndView;
     }
 }
