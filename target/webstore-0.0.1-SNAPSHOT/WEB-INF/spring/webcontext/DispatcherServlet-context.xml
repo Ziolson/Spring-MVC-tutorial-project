@@ -42,4 +42,20 @@
             </bean>
         </constructor-arg>
     </bean>
+    <bean id="localeResolver" class="org.springframework.web.servlet.i18n.SessionLocaleResolver">
+        <property name="defaultLocale" value="en"/>
+    </bean>
+
+    <mvc:interceptors>
+        <bean class="pl.ziolekmariusz.webstore.interceptor.PerformanceMonitorInterceptor"/>
+        <bean class="org.springframework.web.servlet.i18n.LocaleChangeInterceptor">
+            <property name="paramName" value="language"/>
+        </bean>
+        <bean class="pl.ziolekmariusz.webstore.interceptor.AuditingInterceptor"/>
+        <bean class="pl.ziolekmariusz.webstore.interceptor.PromoCodeInterceptor">
+            <property name="promoCode" value="0FF3R"/>
+            <property name="errorRedirect" value="invalidPromoCode"/>
+            <property name="offerRedirect" value="products/"/>
+        </bean>
+    </mvc:interceptors>
 </beans>
